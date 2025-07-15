@@ -24,7 +24,7 @@ This is a MERN-stack (MongoDB, Express, React, Node.js) mini social network feat
 
 ---
 
-## Part 1: Database Schema & Indexing (Also Detail Available at db/schema.md)
+## Part 1: Database Schema & Indexing (Also Detail Available at db/schema.md with aggregation Pipeline)
 
 **users collection**
 ```js
