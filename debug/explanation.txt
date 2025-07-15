@@ -1,0 +1,95 @@
+
+# Part 4: Debugging & Code Review
+
+### Scenario
+
+You’ve inherited this snippet. It’s meant to fetch, sort, and return posts but sometimes it returns duplicates or hangs.
+
+**postsController.js**
+```js
+async function getSortedPosts(req, res) {
+  const posts = await Posts.find(); // Mongoose model
+  posts.sort((a, b) => b.created - a.created);
+  res.json(posts);
+}
+````
+
+**router.js**
+
+```js
+router.get('/posts', async (req, res) => {
+  await getSortedPosts(req, res);
+  console.log('Done.');
+});
+```
+
+---
+
+## 1. Identify at least two problems (bugs or performance issues)
+
+* **Sorting Issue**
+  Instead of asking MongoDB to do the hard work, the code is pulling all posts into JavaScript and then sorting them in memory. For tiny datasets, you might not notice, but as soon as you have hundreds or thousands of posts, this is going to slow things way down and eat a ton of RAM. MongoDB’s `.sort()` is literally made for this.
+
+* **Hanging/Unresolved Request**
+  If your DB call fails, there’s no `try/catch` or error handler so Express never sends a response. That means the client is left waiting forever, which is super frustrating.
+
+* **Duplicate Results**
+  Just calling `Posts.find()` could get you weird results, especially if something in your data layer or population logic is broken elsewhere. It shouldn’t typically return duplicates unless there’s something odd in the DB or your joins, but I’ve seen messy schemas cause this. If you’re not filtering or de-duplicating, those bugs can leak through.
+
+---
+
+## 2. Propose Corrections (with code and explanation)
+
+### **a) Do Sorting in the Database**
+
+Just tell MongoDB to do the sort:
+
+```js
+const posts = await Posts.find().sort({ created: -1 });
+```
+
+*Why?* It’s way faster, more efficient, and respects DB indexes.
+
+---
+
+### **b) Add Proper Error Handling**
+
+Wrap your logic in a try/catch:
+
+```js
+async function getSortedPosts(req, res) {
+  try {
+    const posts = await Posts.find().sort({ created: -1 });
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+}
+```
+
+*Why?* Users always get a response, even if something fails. Way better for debugging and user experience.
+
+---
+
+### **c) Leaner Router**
+
+You can just plug the controller directly into the route, for clarity:
+
+```js
+router.get('/posts', getSortedPosts);
+```
+
+---
+
+## 3. Why These Fixes Matter
+
+* **Performance:**
+  Letting MongoDB sort and filter is faster and scales better don’t let Node do all the heavy lifting!
+
+* **Reliability:**
+  With error handling, you never leave your users (or frontend devs) guessing why a request hangs.
+
+* **Maintainability:**
+  Code is cleaner, easier to test, and much more “future proof”.
+
+---
